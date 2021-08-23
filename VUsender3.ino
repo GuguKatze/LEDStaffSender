@@ -21,7 +21,7 @@ void setup() {
   analogReadResolution(12);
   //analogReadResolution(8);
   delay(1000);
-  Serial.begin(115200);
+  //Serial.begin(115200);
   Audio.Init();
   BLE.begin();
   String address = BLE.address();
@@ -78,15 +78,15 @@ void controlLed(BLEDevice peripheral) {
   while (peripheral.connected()) {
     if(millis() - lastVuTime > 10){
       Audio.ReadFreq(vu.left, vu.right);
-      /*
+ /*
       for(int i=0;i<7;i++){
         Serial.print(max((vu.left[i]),0));
         Serial.print(":");
         Serial.print(max((vu.right[i]),0));
         if(i<6){ Serial.print(", "); }else{ Serial.println(); }
-      }
-      */
+      }   
       Serial.println(">");
+*/
       ledCharacteristic.writeValue(vu.bytes, sizeof(vu.bytes));
       lastVuTime = millis();
     }
