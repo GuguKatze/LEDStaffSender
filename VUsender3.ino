@@ -3,6 +3,16 @@
 #include <AudioAnalyzer.h>
 Analyzer Audio = Analyzer(9, 10, 0, 1); // strobe/yellow/10, reset/green/11, measure/blue/0
 
+// ultrasonic
+#define PIN_TRIGGER 2
+#define PIN_ECHO    3
+unsigned long lastSonicTime = 0;
+const int SENSOR_MAX_RANGE = 300; // in cm
+unsigned long duration;
+unsigned int distance;
+
+// vu
+unsigned long lastVuTime = 0;
 union vu_ {
   struct __attribute__((packed)){
     //uint16_t left[7];
@@ -14,13 +24,28 @@ union vu_ {
   uint8_t bytes[14];
 };
 union vu_ vu;
+uint8_t peaks = 0;
+unsigned long lastVuStats = 0;
+uint8_t vuCount = 0;
 
-unsigned long lastVuTime = 0;
+uint8_t ledRed   = 4;
+uint8_t ledGreen = 2;
+uint8_t ledBlue  = 3;
 
 void setup() {
+
+  // statusLED
+  pinMode(  ledRed, OUTPUT);
+  pinMode(ledGreen, OUTPUT);
+  pinMode( ledBlue, OUTPUT);
+  analogWrite(  ledRed, 24);
+  analogWrite(ledGreen,  0);
+  analogWrite( ledBlue,  0);
+  
   analogReadResolution(12);
   //analogReadResolution(8);
   delay(1000);
+  Serial.begin(9600);
   //Serial.begin(115200);
   Audio.Init();
   BLE.begin();
@@ -76,20 +101,53 @@ void controlLed(BLEDevice peripheral) {
     return;
   }
   while (peripheral.connected()) {
-    if(millis() - lastVuTime > 10){
+    analogWrite(  ledRed,  0);
+    ///
+    ///
+    ///
+    if(millis() - lastVuTime > 50){
+      lastVuTime = millis();
       Audio.ReadFreq(vu.left, vu.right);
- /*
+
+      for(int i=0; i<5; i++){ // skip the highest 2 bands due to potential white noise
+        if (vu.left[i] > 30 && peaks < 64){ peaks++; }
+        if(vu.right[i] > 30 && peaks < 64){ peaks++; }
+      }
+      if(peaks > 16){
+         analogWrite(ledGreen,  0);
+         analogWrite( ledBlue, 24);
+         // send via BLE
+         ledCharacteristic.writeValue(vu.bytes, sizeof(vu.bytes));
+         vuCount++;
+         if(millis() - lastVuStats > 1000){
+            lastVuStats = millis();
+            Serial.println("vuStats: " + String(vuCount));
+            vuCount = 0;
+         }
+      }else{
+        analogWrite(ledGreen, 24);
+        analogWrite( ledBlue,  0);
+      }
+      if(peaks > 0){
+        peaks--;
+      }
+      
+      /*
       for(int i=0;i<7;i++){
         Serial.print(max((vu.left[i]),0));
         Serial.print(":");
         Serial.print(max((vu.right[i]),0));
         if(i<6){ Serial.print(", "); }else{ Serial.println(); }
       }   
-      Serial.println(">");
-*/
-      ledCharacteristic.writeValue(vu.bytes, sizeof(vu.bytes));
-      lastVuTime = millis();
+      */
+      
     }
+    ///
+    ///
+    ///
   }
+  analogWrite(  ledRed, 24);
+  analogWrite(ledGreen,  0);
+  analogWrite( ledBlue,  0);
   Serial.println("Peripheral disconnected");
 }
