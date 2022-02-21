@@ -19,11 +19,16 @@ const int SENSOR_MAX_RANGE = 300; // in cm
 unsigned long duration;
 unsigned int distance;
 
-unsigned long lastVuTime = 0;
-union vuPacket_ vuPacket;
+/////////////
+// packets //
+union effectPacket_ effectPacket;
+union pitchPacket_  pitchPacket;
+union vuPacket_     vuPacket;
 
 unsigned long lastPitchPacketTime = 0;
-union pitchPacket_ pitchPacket;
+unsigned long lastVuTime = 0;
+// packets //
+/////////////
 
 uint8_t peaks = 0;
 unsigned long lastVuStats = 0;
@@ -32,6 +37,7 @@ uint8_t vuCount = 0;
 uint8_t ledRed   = 4;
 uint8_t ledGreen = 2;
 uint8_t ledBlue  = 3;
+unsigned long ledBlueLastTime = 0;
 
 void setup() {
 
@@ -117,8 +123,9 @@ void controlLed(BLEDevice peripheral) {
     if(microsNow - microsPrevious >= microsPerReading) {
       imuLogic();
       if(millis() - lastPitchPacketTime > 250){
-        analogWrite(ledGreen,  0);
+        //analogWrite(ledGreen,  0);
         analogWrite( ledBlue, 24);
+        ledBlueLastTime = millis();
         lastPitchPacketTime = millis();
         uint8_t p = int(pitch);
         pitchPacket.pitch = p;
@@ -139,8 +146,9 @@ void controlLed(BLEDevice peripheral) {
         if(vuPacket.right[i] > 30 && peaks < 64){ peaks++; }
       }
       if(peaks > 16){
-         analogWrite(ledGreen,  0);
+         //analogWrite(ledGreen,  0);
          analogWrite( ledBlue, 24);
+          ledBlueLastTime = millis();
          // send via BLE
          ledCharacteristic.writeValue(vuPacket.bytes, sizeof(vuPacket.bytes));
          vuCount++;
@@ -150,8 +158,10 @@ void controlLed(BLEDevice peripheral) {
             vuCount = 0;
          }
       }else{
-        analogWrite(ledGreen, 24);
-        analogWrite( ledBlue,  0);
+        //analogWrite(ledGreen, 24);
+        if(millis() - ledBlueLastTime > 100){
+          analogWrite( ledBlue,  0);
+        }
       }
       if(peaks > 0){
         peaks--;
