@@ -116,11 +116,14 @@ void controlLed(BLEDevice peripheral) {
     unsigned long microsNow = micros();
     if(microsNow - microsPrevious >= microsPerReading) {
       imuLogic();
-      if(millis() - lastPitchPacketTime > 1000){
+      if(millis() - lastPitchPacketTime > 250){
+        analogWrite(ledGreen,  0);
+        analogWrite( ledBlue, 24);
         lastPitchPacketTime = millis();
         uint8_t p = int(pitch);
         pitchPacket.pitch = p;
         Serial.println(p);
+        ledCharacteristic.writeValue(pitchPacket.bytes, sizeof(pitchPacket.bytes));
       }
     }
 
