@@ -1,6 +1,14 @@
+#include "Globals.h"
+#include "ImuLogic.h"
 #include <Arduino.h>
 #include <ArduinoBLE.h>
 #include <AudioAnalyzer.h>
+
+Madgwick filter;
+const float sensorRate = 104.00;
+unsigned long microsPerReading = 0;
+unsigned long microsPrevious = 0;
+
 Analyzer Audio = Analyzer(9, 10, 0, 1); // strobe/yellow/10, reset/green/11, measure/blue/0
 
 // ultrasonic
@@ -11,19 +19,12 @@ const int SENSOR_MAX_RANGE = 300; // in cm
 unsigned long duration;
 unsigned int distance;
 
-// vu
 unsigned long lastVuTime = 0;
-union vu_ {
-  struct __attribute__((packed)){
-    //uint16_t left[7];
-    uint8_t left[7];
-    //uint16_t right[7];
-    uint8_t right[7];
-  };
-  //uint8_t bytes[28];
-  uint8_t bytes[14];
-};
-union vu_ vu;
+union vuPacket_ vuPacket;
+
+unsigned long lastPitchPacketTime = 0;
+union pitchPacket_ pitchPacket;
+
 uint8_t peaks = 0;
 unsigned long lastVuStats = 0;
 uint8_t vuCount = 0;
@@ -48,6 +49,13 @@ void setup() {
   Serial.begin(9600);
   //Serial.begin(115200);
   Audio.Init();
+
+  // IMU
+  while(!IMU.begin()) { delay(1000); };
+  filter.begin(sensorRate);
+  microsPerReading = 1000000 / sensorRate;
+
+  // BLE
   BLE.begin();
   String address = BLE.address();
   Serial.print("BLE Center @ ");
@@ -103,25 +111,39 @@ void controlLed(BLEDevice peripheral) {
   while (peripheral.connected()) {
     analogWrite(  ledRed,  0);
     ///
+    /// IMU
     ///
+    unsigned long microsNow = micros();
+    if(microsNow - microsPrevious >= microsPerReading) {
+      imuLogic();
+      if(millis() - lastPitchPacketTime > 1000){
+        lastPitchPacketTime = millis();
+        uint8_t p = int(pitch);
+        pitchPacket.pitch = p;
+        Serial.println(p);
+      }
+    }
+
+    ///
+    /// VU
     ///
     if(millis() - lastVuTime > 50){
       lastVuTime = millis();
-      Audio.ReadFreq(vu.left, vu.right);
+      Audio.ReadFreq(vuPacket.left, vuPacket.right);
 
       for(int i=0; i<5; i++){ // skip the highest 2 bands due to potential white noise
-        if (vu.left[i] > 30 && peaks < 64){ peaks++; }
-        if(vu.right[i] > 30 && peaks < 64){ peaks++; }
+        if (vuPacket.left[i] > 30 && peaks < 64){ peaks++; }
+        if(vuPacket.right[i] > 30 && peaks < 64){ peaks++; }
       }
       if(peaks > 16){
          analogWrite(ledGreen,  0);
          analogWrite( ledBlue, 24);
          // send via BLE
-         ledCharacteristic.writeValue(vu.bytes, sizeof(vu.bytes));
+         ledCharacteristic.writeValue(vuPacket.bytes, sizeof(vuPacket.bytes));
          vuCount++;
          if(millis() - lastVuStats > 1000){
             lastVuStats = millis();
-            Serial.println("vuStats: " + String(vuCount));
+            //Serial.println("vuStats: " + String(vuCount));
             vuCount = 0;
          }
       }else{
