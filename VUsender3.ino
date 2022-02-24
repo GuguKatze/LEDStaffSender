@@ -19,20 +19,19 @@ const int SENSOR_MAX_RANGE = 300; // in cm
 unsigned long duration;
 unsigned int distance;
 
+
 /////////////
 // packets //
+/////////////
 union effectPacket_ effectPacket;
 union pitchPacket_  pitchPacket;
 union vuPacket_     vuPacket;
 
 unsigned long lastPitchPacketTime = 0;
-unsigned long lastVuTime = 0;
-// packets //
-/////////////
+unsigned long lastVuPacketTime    = 0;
 
 uint8_t peaks = 0;
-unsigned long lastVuStats = 0;
-uint8_t vuCount = 0;
+
 
 uint8_t ledRed   = 4;
 uint8_t ledGreen = 2;
@@ -116,17 +115,23 @@ void controlLed(BLEDevice peripheral) {
   }
   while (peripheral.connected()) {
     analogWrite(  ledRed,  0);
-    ///
-    /// IMU
-    ///
+    
+    if(millis() - ledBlueLastTime > 20){
+      analogWrite( ledBlue,  0);
+    }
+    
+    /////////
+    // IMU //
+    /////////
     unsigned long microsNow = micros();
     if(microsNow - microsPrevious >= microsPerReading) {
       imuLogic();
-      if(millis() - lastPitchPacketTime > 250){
-        //analogWrite(ledGreen,  0);
+      if(millis() - lastPitchPacketTime > 200){
+        lastPitchPacketTime = millis();
+        
         analogWrite( ledBlue, 24);
         ledBlueLastTime = millis();
-        lastPitchPacketTime = millis();
+       
         uint8_t p = int(pitch);
         pitchPacket.pitch = p;
         Serial.println(p);
@@ -134,11 +139,12 @@ void controlLed(BLEDevice peripheral) {
       }
     }
 
-    ///
-    /// VU
-    ///
-    if(millis() - lastVuTime > 50){
-      lastVuTime = millis();
+    ////////
+    // VU //
+    ////////
+    if(millis() - lastVuPacketTime > 200){
+      lastVuPacketTime = millis();
+
       Audio.ReadFreq(vuPacket.left, vuPacket.right);
 
       for(int i=0; i<5; i++){ // skip the highest 2 bands due to potential white noise
@@ -146,22 +152,10 @@ void controlLed(BLEDevice peripheral) {
         if(vuPacket.right[i] > 30 && peaks < 64){ peaks++; }
       }
       if(peaks > 16){
-         //analogWrite(ledGreen,  0);
          analogWrite( ledBlue, 24);
-          ledBlueLastTime = millis();
-         // send via BLE
+         ledBlueLastTime = millis();
+         
          ledCharacteristic.writeValue(vuPacket.bytes, sizeof(vuPacket.bytes));
-         vuCount++;
-         if(millis() - lastVuStats > 1000){
-            lastVuStats = millis();
-            //Serial.println("vuStats: " + String(vuCount));
-            vuCount = 0;
-         }
-      }else{
-        //analogWrite(ledGreen, 24);
-        if(millis() - ledBlueLastTime > 100){
-          analogWrite( ledBlue,  0);
-        }
       }
       if(peaks > 0){
         peaks--;
