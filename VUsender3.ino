@@ -6,7 +6,7 @@
 
 Madgwick filter;
 const float sensorRate = 104.00;
-unsigned long microsPerReading = 0;
+unsigned long microsPerReading;
 unsigned long microsPrevious = 0;
 
 Analyzer Audio = Analyzer(9, 10, 0, 1); // strobe/yellow/10, reset/green/11, measure/blue/0
@@ -123,18 +123,21 @@ void controlLed(BLEDevice peripheral) {
     /////////
     // IMU //
     /////////
-    unsigned long microsNow = micros();
-    if(microsNow - microsPrevious >= microsPerReading) {
+    if(micros() - microsPrevious >= microsPerReading) {
+      microsPrevious = micros();
       imuLogic();
-      if(millis() - lastPitchPacketTime > 200){
+      if(millis() - lastPitchPacketTime > 100){
         lastPitchPacketTime = millis();
+
+        Serial.println(pitchFiltered);
         
         analogWrite( ledBlue, 24);
         ledBlueLastTime = millis();
        
-        uint8_t p = int(pitch);
-        pitchPacket.pitch = p;
-        Serial.println(p);
+        uint8_t pitchFilteredInt = int(pitchFiltered);
+        pitchPacket.pitch = pitchFilteredInt;
+        //Serial.println(pitchPacket.pitch);
+
         ledCharacteristic.writeValue(pitchPacket.bytes, sizeof(pitchPacket.bytes));
       }
     }
