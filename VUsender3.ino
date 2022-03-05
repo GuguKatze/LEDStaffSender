@@ -9,8 +9,6 @@ const float sensorRate = 104.00;
 unsigned long microsPerReading;
 unsigned long microsPrevious = 0;
 
-Analyzer Audio = Analyzer(9, 10, 0, 1); // strobe/yellow/10, reset/green/11, measure/blue/0
-
 // ultrasonic
 #define PIN_TRIGGER 2
 #define PIN_ECHO    3
@@ -19,24 +17,28 @@ const int SENSOR_MAX_RANGE = 300; // in cm
 unsigned long duration;
 unsigned int distance;
 
+Analyzer Audio = Analyzer(9, 10, 0, 1); // strobe/yellow/10, reset/green/11, measure/blue/0
 
 /////////////
 // packets //
 /////////////
-union effectPacket_ effectPacket;
-union pitchPacket_  pitchPacket;
-union vuPacket_     vuPacket;
+union effectPacket_           effectPacket;
+union pitchPacket_             pitchPacket;
+union vuPacket_                   vuPacket;
+union pitchRemotePacket_ pitchRemotePacket;
 
-unsigned long lastPitchPacketTime = 0;
+unsigned long lastPitchRemotePacketTime = 0;
 unsigned long lastVuPacketTime    = 0;
 
 uint8_t peaks = 0;
 
-
 uint8_t ledRed   = 4;
 uint8_t ledGreen = 2;
 uint8_t ledBlue  = 3;
+unsigned long ledRedLastTime = 0;
+unsigned long ledGreenLastTime = 0;
 unsigned long ledBlueLastTime = 0;
+
 
 void setup() {
 
@@ -103,7 +105,11 @@ void controlLed(BLEDevice peripheral) {
     peripheral.disconnect();
     return;
   }
-  BLECharacteristic ledCharacteristic = peripheral.characteristic("19b10001-e8f2-537e-4f6c-d104768a1214");
+  BLECharacteristic      effectCharacteristic = peripheral.characteristic("19b10001-e8f2-537e-4f6c-d104768a1212");
+  BLECharacteristic pitchRemoteCharacteristic = peripheral.characteristic("19b10001-e8f2-537e-4f6c-d104768a1213");
+  BLECharacteristic          vuCharacteristic = peripheral.characteristic("19b10001-e8f2-537e-4f6c-d104768a1214");
+
+  /*
   if (!ledCharacteristic) {
     Serial.println("Peripheral does not have LED characteristic!");
     peripheral.disconnect();
@@ -113,43 +119,44 @@ void controlLed(BLEDevice peripheral) {
     peripheral.disconnect();
     return;
   }
+  */
+  
   while (peripheral.connected()) {
-    analogWrite(  ledRed,  0);
+    if(millis() - ledRedLastTime   > 25) { analogWrite(    ledRed,  0); }
+    if(millis() - ledGreenLastTime > 25) { analogWrite(  ledGreen,  0); }
+    if(millis() - ledBlueLastTime  > 25) { analogWrite(   ledBlue,  0); }
     
-    if(millis() - ledBlueLastTime > 20){
-      analogWrite( ledBlue,  0);
+    ////////////
+    // EFFECT //
+    ////////////
+    if(random(0,20000) == 0){
+      effectPacket.effect = 5;
+      analogWrite( ledRed, 24);
+      ledRedLastTime = millis();
+      effectCharacteristic.writeValue(effectPacket.bytes, sizeof(effectPacket.bytes));
     }
-    
     /////////
     // IMU //
     /////////
     if(micros() - microsPrevious >= microsPerReading) {
       microsPrevious = micros();
       imuLogic();
-      if(millis() - lastPitchPacketTime > 100){
-        lastPitchPacketTime = millis();
-
-        Serial.println(pitchFiltered);
-        
-        analogWrite( ledBlue, 24);
+      if(millis() - lastPitchRemotePacketTime > 250){
+        lastPitchRemotePacketTime = millis();
+        analogWrite( ledGreen, 24);
         ledBlueLastTime = millis();
-       
-        uint8_t pitchFilteredInt = int(pitchFiltered);
-        pitchPacket.pitch = pitchFilteredInt;
-        //Serial.println(pitchPacket.pitch);
-
-        ledCharacteristic.writeValue(pitchPacket.bytes, sizeof(pitchPacket.bytes));
+        int8_t pitchRemoteFilteredInt = int(pitchRemoteFiltered);
+        pitchRemotePacket.pitch = pitchRemoteFilteredInt;
+        pitchRemoteCharacteristic.writeValue(pitchRemotePacket.bytes, sizeof(pitchRemotePacket.bytes));
       }
     }
 
     ////////
     // VU //
     ////////
-    if(millis() - lastVuPacketTime > 200){
+    if(millis() - lastVuPacketTime > 3000){
       lastVuPacketTime = millis();
-
       Audio.ReadFreq(vuPacket.left, vuPacket.right);
-
       for(int i=0; i<5; i++){ // skip the highest 2 bands due to potential white noise
         if (vuPacket.left[i] > 30 && peaks < 64){ peaks++; }
         if(vuPacket.right[i] > 30 && peaks < 64){ peaks++; }
@@ -157,8 +164,7 @@ void controlLed(BLEDevice peripheral) {
       if(peaks > 16){
          analogWrite( ledBlue, 24);
          ledBlueLastTime = millis();
-         
-         ledCharacteristic.writeValue(vuPacket.bytes, sizeof(vuPacket.bytes));
+         vuCharacteristic.writeValue(vuPacket.bytes, sizeof(vuPacket.bytes));
       }
       if(peaks > 0){
         peaks--;

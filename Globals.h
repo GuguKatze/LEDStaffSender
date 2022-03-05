@@ -1,8 +1,8 @@
 #pragma once
 #include "ImuLogic.h"
 extern Madgwick filter;
-extern float pitchFiltered;
-extern float xAccFiltered;
+extern float pitchRemoteFiltered;
+extern float xAccRemoteFiltered;
 ////////////
 // effect //
 ////////////
@@ -37,3 +37,14 @@ union vuPacket_ {
   uint8_t bytes[15];
 };
 extern union vuPacket_ vuPacket;
+/////////////////
+// pitchRemote //
+/////////////////
+union pitchRemotePacket_ {
+  struct __attribute__((packed)){
+    uint8_t packetType = 4;
+    int8_t pitch;
+  };
+  uint8_t bytes[2];
+};
+extern union pitchRemotePacket_ pitchRemotePacket;
