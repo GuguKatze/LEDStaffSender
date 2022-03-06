@@ -28,7 +28,8 @@ union vuPacket_                   vuPacket;
 union pitchRemotePacket_ pitchRemotePacket;
 
 unsigned long lastPitchRemotePacketTime = 0;
-unsigned long lastVuPacketTime    = 0;
+unsigned long lastVuPacketTime          = 0;
+unsigned long lastEffectTime            = 0;
 
 uint8_t peaks = 0;
 
@@ -129,8 +130,10 @@ void controlLed(BLEDevice peripheral) {
     ////////////
     // EFFECT //
     ////////////
-    if(random(0,20000) == 0){
-      effectPacket.effect = 5;
+    if(millis() - lastEffectTime > 1000 * 20){
+      lastEffectTime = millis();
+      effectPacket.effect   = 1;
+      effectPacket.duration = 5;
       analogWrite( ledRed, 24);
       ledRedLastTime = millis();
       effectCharacteristic.writeValue(effectPacket.bytes, sizeof(effectPacket.bytes));
